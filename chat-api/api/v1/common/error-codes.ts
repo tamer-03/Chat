@@ -27,6 +27,7 @@ const errorCodes = {
     USER_NOT_FOUND : "User not found",
     WRONG_PASSWORD : "Wrong password",
     SUCCESSFULLY_SIGNED_IN : "Successfully signed in",
+    SUCCESSFULLY_SIGN_OUT : "Successfully sign out",
 
     /* TOKEN MESSAGES */
     TOKEN_MISS : "Token expired",

@@ -7,6 +7,7 @@ import jwt from "jsonwebtoken"
 import databasePool from "../../../service/database";
 import { DeviceTypes } from "../model/types/device-types";
 import ProfileStatus from "../model/types/profile-status";
+import { NextFunction } from "express";
 
 export const signUp = genericFunc(async(req,res,next) => {
     const {username,email,password,phone} = req.body
@@ -139,3 +140,10 @@ export const refreshToken = genericFunc(async (req,res,next) => {
 
 })
 
+
+export const signOut = genericFunc(async (req ,res ,next) => {
+    res.clearCookie("access_token")
+    res.clearCookie("refresh_token")
+    res.clearCookie("device")
+    res.json(new ResponseModel(errorCodes.SUCCESSFULLY_SIGN_OUT, 200))
+})

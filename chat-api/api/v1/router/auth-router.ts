@@ -3,6 +3,7 @@ import {
     refreshToken,
     resetPasssword,
     signIn,
+    signOut,
     signUp,
 } from "../controller/auth-controller";
 import inputValidator from "../middleware/input-validator";
@@ -82,7 +83,7 @@ authRouter.post(
     refreshToken
 );
 
-authRouter.post("/sign-in", signIn);
+authRouter.post("/sign-out",[ accessTokenVerify, verifyUser ], signOut)
 
 
 

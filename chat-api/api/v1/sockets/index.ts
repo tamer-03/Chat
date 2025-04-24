@@ -4,6 +4,7 @@ import { webSocketAccessTokenVerify } from "./middleware/socket-token-verify";
 import friendSocket from "./events/friend-socket";
 import chatSocket from "./events/chat-socket";
 import chatGroupSocket from "./events/chat-group-socket";
+import tokenTimeoutHandler from "./handlers/token-timeout-handler";
 
 
 const appSocket = (io : Server) => {
@@ -14,6 +15,7 @@ const appSocket = (io : Server) => {
         const {user_id} = socket.data.user
         socket.join(user_id)
 
+        tokenTimeoutHandler(socket)
         friendSocket(socket)
         chatSocket(socket)
         chatGroupSocket(socket)

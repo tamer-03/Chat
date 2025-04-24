@@ -61,7 +61,8 @@ export const getFriends = async (
 export const getFriendRequests = async(user_id : number) : Promise<IFriendRequests[]> => {
     try{
       return (await databasePool.query(
-        `select u.user_id, u.username, u.email, case when u.photo is null then '/storage/defaults/default_profile_image.png' else concat('/storage/',u.user_id,'/',u.photo) end from users u inner join friends f on f.sender_id = u.user_id where f.receiver_id = ? and f.status = 'waiting'`,
+        `select u.user_id, u.username, u.email, CASE when u.photo is null
+         then '/storage/defaults/default_profile_image.png' else concat('/storage/',u.user_id,'/',u.photo) end as photo from users u inner join friends f on f.sender_id = u.user_id where f.receiver_id = ? and f.status = 'waiting'`,
         [user_id , 'waiting']
       ))[0] as IFriendRequests[]
     }catch(e){

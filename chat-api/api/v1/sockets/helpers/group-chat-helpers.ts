@@ -3,42 +3,59 @@ import IGroupChat from "../../model/interface/igroup-chat";
 import IUser from "../../model/interface/iuser";
 import IuuidResult from "../../model/interface/iuuid-result";
 
-export const createGroupChat = async (groupName : string, user_id : string, members : IUser[]) => {
+export const createGroupChat = async (
+  groupName: string,
+  user_id: string,
+  members: IUser[]
+) => {
+  const connection = await databasePool.getConnection();
+  try {
+    await connection.beginTransaction();
 
     const uuidResult = (
-        await databasePool.query("SELECT UUID() AS uuid")
+      await connection.query("SELECT UUID() AS uuid")
     )[0] as IuuidResult[];
     const chatId = uuidResult[0].uuid;
 
-    await databasePool.query(
-        "INSERT INTO chat_table(chat_id,chat_type) VALUES(UUID_TO_BIN(?),'GROUP')",
-        [chatId]
+    await connection.query(
+      "INSERT INTO chat_table(chat_id,chat_type) VALUES(UUID_TO_BIN(?),'GROUP')",
+      [chatId]
     );
 
-    await databasePool.query(
-        `INSERT INTO chat_group (group_id, chat_id, group_name, creator_user_id, created_at)
-         VALUES (UUID_TO_BIN(UUID()), UUID_TO_BIN(?), ?, ?, NOW());`,
-         [chatId, groupName,user_id]
-    )
+    await connection.query(
+      `INSERT INTO chat_group (group_id, chat_id, group_name, creator_user_id, created_at)
+       VALUES (UUID_TO_BIN(UUID()), UUID_TO_BIN(?), ?, ?, NOW());`,
+      [chatId, groupName, user_id]
+    );
 
-    const membersId = members.map(e => e.user_id)
-    membersId.push(user_id)
+    const membersId = members.map((e) => e.user_id);
+    membersId.push(user_id);
 
-    for(const memberId of membersId){
-        await databasePool.query(
-            "INSERT INTO chat_members (chat_id, user_id) VALUES (UUID_TO_BIN(?), ?)",
-            [chatId, memberId]
-        );
+    for (const memberId of membersId) {
+      await connection.query(
+        "INSERT INTO chat_members (chat_id, user_id) VALUES (UUID_TO_BIN(?), ?)",
+        [chatId, memberId]
+      );
     }
-}
-
+  } catch (e) {
+    await connection.rollback()
+    if (e instanceof Error) {
+      return e;
+    }
+    return Error("Something went wrong");
+  
+  } finally {
+    connection.release()
+  }
+};
 
 export const getGroups = async (user_id: string) => {
-    const getConnection = await databasePool.getConnection();
-    
-    await getConnection.beginTransaction();
-  
-    const groupMessages = (await databasePool.query(
+  const getConnection = await databasePool.getConnection();
+
+  await getConnection.beginTransaction();
+
+  const groupMessages = (
+    await databasePool.query(
       `SELECT
   bin_to_uuid(cg.group_id) AS group_id,
   cg.group_name,
@@ -62,23 +79,29 @@ JOIN
 WHERE
   cm.user_id = ?
   AND ct.chat_type = 'Group'
-`,[user_id]
-    ))[0] as IGroupChat[];
-  
-    await getConnection.commit();
-  
-    return groupMessages
+`,
+      [user_id]
+    )
+  )[0] as IGroupChat[];
+
+  await getConnection.commit();
+
+  return groupMessages;
 };
 
+export const getLastGroupChatMessage = async (
+  chat_id: string,
+  user_id: string,
+  beforeDate?: string,
+  limit: number = 1
+) => {
+  try {
+    const getConn = await databasePool.getConnection();
+    await getConn.beginTransaction();
 
-
-
-export const getLastGroupChatMessage = async (chat_id : string, user_id : string, beforeDate? : string, limit : number = 1) => {
-  try{
-    const getConn = await databasePool.getConnection()
-    await getConn.beginTransaction()
-
-     const result = (await getConn.query(`SELECT
+    const result = (
+      await getConn.query(
+        `SELECT
       u.user_id AS user_id,
       u.username,
       m.message,
@@ -113,13 +136,16 @@ export const getLastGroupChatMessage = async (chat_id : string, user_id : string
   ORDER BY
       m.sended_at DESC
   LIMIT ?;
-  `, [chat_id, user_id, beforeDate, beforeDate, limit]))[0] as IGroupChat[]
+  `,
+        [chat_id, user_id, beforeDate, beforeDate, limit]
+      )
+    )[0] as IGroupChat[];
 
-  await getConn.commit()
+    await getConn.commit();
 
-  return result
-  }catch(e){
-    if(e instanceof Error) return e
-    return Error("Something went wrong")
+    return result;
+  } catch (e) {
+    if (e instanceof Error) return e;
+    return Error("Something went wrong");
   }
-}
+};

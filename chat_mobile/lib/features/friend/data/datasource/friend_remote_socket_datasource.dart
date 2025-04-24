@@ -104,15 +104,17 @@ class FriendRemoteSocketDatasource {
     if (_socket == null || !_socket!.connected) {
       await connect();
     }
-
+    log('updateFriendRequest called with senderId: $senderId, status: $status');
     Completer<BaseResponseModel> completer = Completer();
     _socket?.emit('update_friend_request', {
       'sender_id': senderId,
       'status': status,
+      'friend_status_type': status
     });
     _socket?.on('update_friend_request_result', (data) {
       _socket?.off('update_friend_request_result');
       if (data != null && data is Map<String, dynamic>) {
+        log('update_friend_request_result event received: $data');
         try {
           BaseResponseModel responseModel = BaseResponseModel.fromJson(
             data,
@@ -146,6 +148,7 @@ class FriendRemoteSocketDatasource {
       _socket?.off('get_friend_requests_result');
       if (data != null && data is Map<String, dynamic>) {
         try {
+          log(data.toString());
           BaseResponseModel<FriendRequestModel> responseModel =
               BaseResponseModel.fromJson(
                   data, (json) => FriendRequestModel.fromJson(json));

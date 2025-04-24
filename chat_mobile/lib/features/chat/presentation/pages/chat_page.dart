@@ -33,22 +33,38 @@ class _ChatPageState extends State<ChatPage> {
   @override
   void initState() {
     super.initState();
-    _storage.read(key: 'username').then((value) {
-      setState(() {
-        _username = value!;
-      });
-    });
-    _storage.read(key: 'to_userId').then((value) => setState(() {
-          _toUserId = int.parse(value!);
-        }));
+    _loadUserInfo();
+    // _storage.read(key: 'username').then((value) {
+    //   setState(() {
+    //     _username = value!;
+    //   });
+    // });
+    // _storage.read(key: 'to_userId').then((value) => setState(() {
+    //       _toUserId = int.parse(value!);
+    //     }));
 
-    _storage.read(key: 'chatId').then((value) => setState(() {
-          _chatId = value!;
-        }));
-    Future.delayed(Duration(seconds: 1), () {
-      log(_chatId);
-      getAllMessage(_chatId);
+    // _storage.read(key: 'chatId').then((value) => setState(() {
+    //       _chatId = value!;
+    //     }));
+    // Future.delayed(Duration(seconds: 1), () {
+    //   log(_chatId);
+    //   getAllMessage(_chatId);
+    // });
+  }
+
+  Future<void> _loadUserInfo() async {
+    final responseInfo = await Future.wait([
+      _storage.read(key: 'username'),
+      _storage.read(key: 'chatId'),
+      _storage.read(key: 'to_userId'),
+    ]);
+    setState(() {
+      _username = responseInfo[0]!;
+      _chatId = responseInfo[1]!;
+      _toUserId = int.parse(responseInfo[2]!);
     });
+
+    getAllMessage(_chatId);
   }
 
   @override
