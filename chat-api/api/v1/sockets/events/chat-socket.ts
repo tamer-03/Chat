@@ -23,9 +23,10 @@ const chatSocket = (socket: Socket) => {
 
   socket.on("send_chat_message", async (data) => {
     const { message_type } = data
-
+    console.log("message_type", message_type);
     switch(message_type) {
       case MessageTypes.text : 
+      console.log("text message");
          await sendTextMessageHandler(data, socket)
       break;
 

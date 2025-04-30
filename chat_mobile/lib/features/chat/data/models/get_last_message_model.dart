@@ -9,6 +9,7 @@ class GetLastMessageModel extends GetLastMessageEntity {
       required super.chatMessageId,
       required super.message,
       required super.sendedAt,
+      required super.chatType,
       super.chatImage});
 
   factory GetLastMessageModel.fromJson(Map<String, dynamic> json) {
@@ -21,6 +22,7 @@ class GetLastMessageModel extends GetLastMessageEntity {
       username: json['username'],
       photo: json['photo'],
       chatMessageId: json['chat_message_id'],
+      chatType: json['chat_type'],
     );
   }
 }

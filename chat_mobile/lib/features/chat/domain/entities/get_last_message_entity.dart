@@ -7,6 +7,7 @@ class GetLastMessageEntity {
   final String? chatImage;
   final String message;
   final DateTime sendedAt;
+  final String chatType;
 
   GetLastMessageEntity({
     required this.message,
@@ -17,5 +18,6 @@ class GetLastMessageEntity {
     required this.username,
     required this.photo,
     required this.chatMessageId,
+    required this.chatType,
   });
 }

@@ -6,6 +6,7 @@ abstract class ChatRepository {
   Future<BaseResponseModel> createChat(int userId);
   Future<BaseResponseModel<GetChatEntity>> getChats();
   Future<void> joinChat(String chatId);
-  Future<void> getLastMessage(String message, String chatId);
+  Future<void> getLastMessage(
+      String message, String chatId, String messageType, String chatType);
   Future<BaseResponseModel<GetLastMessageEntity>> getAllMessage(String chatId);
 }

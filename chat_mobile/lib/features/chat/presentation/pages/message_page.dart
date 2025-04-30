@@ -27,6 +27,7 @@ class _MessagePageState extends State<MessagePage> {
   }
 
   void getChats() {
+    log('get chats called');
     BlocProvider.of<ChatBloc>(context).add(GetChatsEvent());
   }
 
@@ -148,6 +149,7 @@ class _MessagePageState extends State<MessagePage> {
               storage.write(key: 'chatId', value: chat.chatId);
               storage.write(key: 'username', value: chat.username);
               storage.write(key: 'to_userId', value: chat.userId.toString());
+              storage.write(key: 'chat_type', value: chat.chatType);
               await Navigator.pushNamed(context, '/chat');
               getChats();
               //getLocalChats();

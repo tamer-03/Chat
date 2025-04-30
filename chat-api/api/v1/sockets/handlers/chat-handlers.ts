@@ -25,6 +25,7 @@ export const sendTextMessageHandler = async (data: any, socket: Socket) => {
   try {
     const { user_id } = socket.data.user;
     const { chat_id, message, chat_type } = data;
+    console.log("message", message, chat_id, chat_type);
     const io = getSocketInstanse();
 
     const ifError = await sendChatMessage(message, user_id, chat_id);
@@ -259,6 +260,7 @@ export const messageSeemedHandler = async (data: any, socket: Socket) => {
   }
 };
 
+
 export const getChatMessageHandler = async (data: any, socket: Socket) => {
   try {
     const { chat_id } = data;
@@ -321,6 +323,12 @@ export const createChatHandler = async (data: any, socket: Socket) => {
     }
 
     await createChat(user_id, to_user_id);
+
+    socket.emit("create_chat_result", {
+      message: errorCodes.SUCCESS,
+      status: 200,
+    } as ResponseModel);
+    
 
     socket.emit("get_chats_result", {
       message: errorCodes.SUCCESS,

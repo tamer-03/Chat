@@ -1,3 +1,5 @@
+import 'package:chat_android/core/constant/chat_types.dart';
+import 'package:chat_android/core/constant/message_types.dart';
 import 'package:chat_android/core/theme.dart';
 import 'package:chat_android/features/chat/domain/entities/get_last_message_entity.dart';
 import 'package:chat_android/features/chat/domain/entities/local_all_messages_entity.dart';
@@ -26,14 +28,17 @@ class _ChatPageState extends State<ChatPage> {
   late String _username;
   late String _chatId;
   late int _toUserId;
+  late String _chatType;
   List<GetLastMessageEntity> localMessages = [];
-  final List<LocalAllMessagesEntity> localAllMessages = [];
+  List<LocalAllMessagesEntity> localAllMessages = [];
   final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
+
     _loadUserInfo();
+
     // _storage.read(key: 'username').then((value) {
     //   setState(() {
     //     _username = value!;
@@ -46,6 +51,10 @@ class _ChatPageState extends State<ChatPage> {
     // _storage.read(key: 'chatId').then((value) => setState(() {
     //       _chatId = value!;
     //     }));
+
+    // _storage.read(key: 'chat_type').then((value) => setState(() {
+    //       _chatType = value!;
+    //     }));
     // Future.delayed(Duration(seconds: 1), () {
     //   log(_chatId);
     //   getAllMessage(_chatId);
@@ -53,18 +62,23 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   Future<void> _loadUserInfo() async {
-    final responseInfo = await Future.wait([
+    final response = await Future.wait([
       _storage.read(key: 'username'),
       _storage.read(key: 'chatId'),
       _storage.read(key: 'to_userId'),
+      _storage.read(key: 'chat_type'),
     ]);
     setState(() {
-      _username = responseInfo[0]!;
-      _chatId = responseInfo[1]!;
-      _toUserId = int.parse(responseInfo[2]!);
+      _username = response[0]!;
+      _chatId = response[1]!;
+      _toUserId = int.parse(response[2]!);
+      _chatType = response[3]!;
     });
 
-    getAllMessage(_chatId);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      log('chatId (after load): $_chatId');
+      getAllMessage(_chatId);
+    });
   }
 
   @override
@@ -74,6 +88,7 @@ class _ChatPageState extends State<ChatPage> {
     _storage.delete(key: 'username');
     _storage.delete(key: 'chatId');
     _storage.delete(key: 'to_userId');
+    _storage.delete(key: 'chat_type');
     localAllMessages.clear();
     super.dispose();
   }
@@ -93,82 +108,78 @@ class _ChatPageState extends State<ChatPage> {
   //   log('creating chat');
   // }
 
-  void sendMessageAndGetLastMessage(String message, String chatId) {
+  void sendMessageAndGetLastMessage(
+      String message, String chatId, String messageType, String chatType) {
     log('sendMessageAndGetLastMessage $message');
     BlocProvider.of<ChatBloc>(context)
-        .add(GetLastMessageEvent(message, chatId));
+        .add(GetLastMessageEvent(message, chatId, messageType, chatType));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Row(
-          children: [
-            CircleAvatar(
-              backgroundImage: NetworkImage("https://placehold.co/600x400"),
-            ),
-            SizedBox(
-              width: 10,
-            ),
-            Text(
-              _username,
-              style: Theme.of(context).textTheme.titleMedium,
-            )
-          ],
-        ),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        actions: [IconButton(onPressed: () {}, icon: Icon(Icons.search))],
-      ),
-      body: MultiBlocListener(
-        listeners: [
-          BlocListener<ChatBloc, ChatState>(
-            listener: (context, state) {
-              if (state is GetLastMessageSucces) {
-                setState(() {
-                  localAllMessages.add(LocalAllMessagesEntity(
-                      message: state.messageEntity.message ?? '',
-                      sendedAt: DateTime.now(),
-                      photo: state.messageEntity.photoUrl,
-                      userId: state.messageEntity.userId));
-                });
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  _scrollController
-                      .jumpTo(_scrollController.position.maxScrollExtent);
-                });
-                //getAllMessage(_chatId);
-              } else if (state is GetAllMessageSucces) {
-                setState(() {
-                  localAllMessages.clear();
-                  localAllMessages.addAll(state.messageEntity.map((e) {
-                    return LocalAllMessagesEntity(
-                        message: e.message,
-                        sendedAt: e.sendedAt,
-                        photo: e.photo,
-                        userId: e.userId);
-                  }).toList());
-                });
-              }
-            },
+        appBar: AppBar(
+          title: Row(
+            children: [
+              CircleAvatar(
+                backgroundImage: NetworkImage("https://placehold.co/600x400"),
+              ),
+              SizedBox(
+                width: 10,
+              ),
+              Text(
+                _username,
+                style: Theme.of(context).textTheme.titleMedium,
+              )
+            ],
           ),
-        ],
-        child: Column(
-          children: [
-            Expanded(child:
-                BlocBuilder<ChatBloc, ChatState>(builder: (context, state) {
-              if (state is ChatLoading) {
-                return Center(child: CircularProgressIndicator());
-              } else if (state is ChatFailure) {
-                return Center(child: Text(state.errorMessage));
-              }
-              return _buildListMessages(localAllMessages);
-            })),
-            _buildMessageInput()
-          ],
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          actions: [IconButton(onPressed: () {}, icon: Icon(Icons.search))],
         ),
-      ),
-    );
+        body: BlocConsumer<ChatBloc, ChatState>(builder: (context, state) {
+          if (state is ChatLoading) {
+            return Center(child: CircularProgressIndicator());
+          } else if (state is ChatFailure) {
+            return Center(child: Text(state.errorMessage));
+          }
+          return Column(children: [
+            Expanded(child: _buildListMessages(localAllMessages)),
+            _buildMessageInput()
+          ]);
+        }, listener: (context, state) {
+          log('BlocListener state değişimi: ${state.runtimeType}');
+          if (state is GetLastMessageSucces) {
+            setState(() {
+              localAllMessages.add(LocalAllMessagesEntity(
+                  message: state.messageEntity.message ?? '',
+                  sendedAt: DateTime.now(),
+                  photo: state.messageEntity.photo,
+                  userId: state.messageEntity.userId));
+            });
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _scrollController
+                  .jumpTo(_scrollController.position.maxScrollExtent);
+            });
+            //getAllMessage(_chatId);
+          } else if (state is GetAllMessageSucces) {
+            log(' getAllMessageSucces UI ');
+            setState(() {
+              log('getAllMessageSucces $localAllMessages');
+              localAllMessages.addAll(state.messageEntity.map((e) {
+                return LocalAllMessagesEntity(
+                    message: e.message,
+                    sendedAt: e.sendedAt,
+                    photo: e.photo,
+                    userId: e.userId);
+              }).toList());
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                _scrollController
+                    .jumpTo(_scrollController.position.maxScrollExtent);
+              });
+            });
+          }
+        }));
   }
 
   Widget _buildListMessages(List<LocalAllMessagesEntity> messages) {
@@ -178,9 +189,10 @@ class _ChatPageState extends State<ChatPage> {
       itemBuilder: (context, index) {
         final message = messages[index];
         if (message.userId == _toUserId) {
-          return _buildReceivedMessage(context, message.message);
+          return _buildReceivedMessage(
+              context, message.message, message.sendedAt);
         } else {
-          return _buildSentMessage(context, message.message);
+          return _buildSentMessage(context, message.message, message.sendedAt);
         }
       },
     );
@@ -222,11 +234,16 @@ class _ChatPageState extends State<ChatPage> {
               color: Colors.grey,
             ),
             onTap: () {
-              sendMessageAndGetLastMessage(
-                _messageController.text,
-                _chatId,
-              );
-              _messageController.clear();
+              log('chat_type: $_chatType');
+              if (_chatType == ChatTypes.personal) {
+                sendMessageAndGetLastMessage(_messageController.text, _chatId,
+                    MessageTypes.text, _chatType);
+                _messageController.clear();
+              } else if (_chatType == ChatTypes.group) {
+                sendMessageAndGetLastMessage(_messageController.text, _chatId,
+                    MessageTypes.text, _chatType);
+                _messageController.clear();
+              }
             },
           ),
         ],
@@ -234,43 +251,71 @@ class _ChatPageState extends State<ChatPage> {
     );
   }
 
-  Widget _buildReceivedMessage(BuildContext context, String message) {
+  Widget _buildReceivedMessage(
+      BuildContext context, String message, DateTime date) {
     return Align(
       alignment: Alignment.centerLeft,
       child: Container(
-        margin: EdgeInsets.only(right: 30, top: 5, bottom: 5),
-        padding: EdgeInsets.all(15),
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.7,
+        ),
+        margin: EdgeInsets.only(left: 16, top: 4, bottom: 4, right: 60),
+        padding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-            color: DefaultColors.receiverMessage,
-            borderRadius: BorderRadius.only(
-                topRight: Radius.circular(20),
-                bottomRight: Radius.circular(20),
-                topLeft: Radius.circular(20))),
-        child: Text(
-          message,
-          style: Theme.of(context).textTheme.bodyMedium,
+          color: DefaultColors.senderMessage,
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(2),
+            bottomLeft: Radius.circular(18),
+            topRight: Radius.circular(18),
+            bottomRight: Radius.circular(18),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(message, style: Theme.of(context).textTheme.bodyMedium),
+            SizedBox(height: 3),
+            Text(_formatMessageTime(date),
+                style: Theme.of(context).textTheme.bodySmall),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildSentMessage(BuildContext context, String message) {
+  Widget _buildSentMessage(
+      BuildContext context, String message, DateTime date) {
     return Align(
       alignment: Alignment.centerRight,
       child: Container(
-        margin: EdgeInsets.only(right: 30, top: 5, bottom: 5),
-        padding: EdgeInsets.all(15),
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.7,
+        ),
+        margin: EdgeInsets.only(right: 16, top: 4, bottom: 4, left: 60),
+        padding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-            color: DefaultColors.senderMessage,
-            borderRadius: BorderRadius.only(
-                topRight: Radius.circular(20),
-                bottomLeft: Radius.circular(20),
-                topLeft: Radius.circular(20))),
-        child: Text(
-          message,
-          style: Theme.of(context).textTheme.bodyMedium,
+          color: DefaultColors.senderMessage,
+          borderRadius: BorderRadius.only(
+            topRight: Radius.circular(2),
+            bottomLeft: Radius.circular(18),
+            topLeft: Radius.circular(18),
+            bottomRight: Radius.circular(18),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(message, style: Theme.of(context).textTheme.bodyMedium),
+            SizedBox(height: 3),
+            Text(_formatMessageTime(date),
+                style: Theme.of(context).textTheme.bodySmall),
+          ],
         ),
       ),
     );
+  }
+
+  String _formatMessageTime(DateTime dateTime) {
+    return "${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}";
   }
 }

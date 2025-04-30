@@ -15,10 +15,10 @@ class ChatRemoteDataSource {
   factory ChatRemoteDataSource() => _instance;
   ChatRemoteDataSource._internal();
   io.Socket? _socket;
-  final StreamController<GetChatModel> _messageController =
-      StreamController<GetChatModel>.broadcast();
+  final StreamController<GetLastMessageModel> _messageController =
+      StreamController<GetLastMessageModel>.broadcast();
 
-  Stream<GetChatModel> get messageStream => _messageController.stream;
+  Stream<GetLastMessageModel> get messageStream => _messageController.stream;
 
   final _storage = FlutterSecureStorage();
   final _baseUrl = dotenv.env['BASE_URL'];
@@ -65,15 +65,15 @@ class ChatRemoteDataSource {
     log('datasource gets message');
     Completer<BaseResponseModel<GetLastMessageModel>> completer = Completer();
     _socket?.emit('get_chat_messages', {'chat_id': chatId});
-    _socket?.on('get_chat_messages_result', (data) {
-      log('data : $data');
-      _socket?.off('get_chat_messages_result');
+    _socket?.once('get_chat_messages_result', (data) {
+      log('data getAllMesage datasource : $data');
+
       if (data != null && data is Map<String, dynamic>) {
         final responseModel = BaseResponseModel.fromJson(
           data,
           (json) => GetLastMessageModel.fromJson(json),
         );
-        log('gelen yanıt ${responseModel.data}');
+        log('gelen yanıt ${responseModel.data?.first}');
         if (responseModel.status == 200) {
           completer.complete(responseModel);
         } else {
@@ -81,21 +81,33 @@ class ChatRemoteDataSource {
         }
       }
     });
+
+    Future.delayed(Duration(seconds: 5), () {
+      if (!completer.isCompleted) {
+        completer.completeError('Timeout: No response from server.');
+      }
+    });
     return completer.future;
   }
 
-  Future<void> getLastMessage(String message, String chatId) async {
+  Future<void> getLastMessage(String message, String chatId, String messageType,
+      String chatType) async {
     if (_socket == null || !_socket!.connected) {
       await connect();
     }
 
     Completer<BaseResponseModel<GetChatModel>> completer = Completer();
-    _socket?.emit('send_chat_message', {'message': message, 'chat_id': chatId});
+    _socket?.emit('send_chat_message', {
+      'message': message,
+      'chat_id': chatId,
+      'message_type': messageType,
+      'chat_type': chatType
+    });
     log('mesaj gönderme isteği yollandı');
     _socket?.on(
       'send_chat_message_result',
       (data) {
-        _socket?.off('send_chat_message_result');
+        _socket?.off('notification_channel');
         if (data != null && data is Map<String, dynamic>) {
           try {
             final responseModel = BaseResponseModel.fromJson(
@@ -117,16 +129,16 @@ class ChatRemoteDataSource {
   }
 
   void _listenIncomingMessage() {
-    _socket?.off('get_chat_messages_result');
+    _socket?.off('get_chats_result');
 
-    _socket?.on('get_chat_messages_result', (data) {
+    _socket?.on('get_chats_result', (data) {
       //_socket?.off('get_chat_messages_result');
       if (data != null && data is Map<String, dynamic>) {
         log('data not null');
         try {
           final responseModel = BaseResponseModel.fromJson(
             data,
-            (json) => GetChatModel.fromJson(json),
+            (json) => GetLastMessageModel.fromJson(json),
           );
           if (responseModel.status == 200) {
             log('gelen mesaj: ${responseModel.data?.first.message}');

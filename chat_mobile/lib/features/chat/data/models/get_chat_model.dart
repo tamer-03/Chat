@@ -7,6 +7,7 @@ class GetChatModel extends GetChatEntity {
     required super.message,
     required super.chatId,
     required super.photoUrl,
+    required super.chatType,
   });
 
   factory GetChatModel.fromJson(Map<String, dynamic> json) {
@@ -15,7 +16,8 @@ class GetChatModel extends GetChatEntity {
         username: json['username'],
         message: json['message'],
         chatId: json['chat_id'],
-        photoUrl: json['photo']);
+        photoUrl: json['photo'],
+        chatType: json['chat_type']);
     return model;
   }
 }

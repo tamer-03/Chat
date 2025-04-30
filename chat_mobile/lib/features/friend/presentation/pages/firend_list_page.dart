@@ -1,3 +1,4 @@
+import 'package:chat_android/core/constant/chat_types.dart';
 import 'package:chat_android/features/chat/presentation/blocs/chat_bloc.dart';
 import 'package:chat_android/features/chat/presentation/blocs/chat_event.dart';
 import 'package:chat_android/features/chat/presentation/blocs/chat_state.dart';
@@ -75,6 +76,8 @@ class _FirendListPageState extends State<FirendListPage> {
                 log('chatId: ${chatUserId.chatId}');
                 _storage.write(
                     key: 'chatId', value: chatUserId.chatId.toString());
+                _storage.write(
+                    key: 'chat_type', value: chatUserId.chatType.toString());
 
                 Navigator.pushNamed(context, '/chat');
               } else if (state is ChatSuccess) {

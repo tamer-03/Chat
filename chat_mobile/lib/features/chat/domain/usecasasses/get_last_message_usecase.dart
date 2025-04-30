@@ -5,7 +5,9 @@ import 'package:chat_android/features/chat/domain/repository/chat_repository.dar
 class GetLastMessageUsecase {
   ChatRepository chatRepository;
   GetLastMessageUsecase(this.chatRepository);
-  Future<void> call(String message, String chatId) {
-    return chatRepository.getLastMessage(message, chatId);
+  Future<void> call(String message, String chatId, String messageType,
+      String chatType) async {
+    return chatRepository.getLastMessage(
+        message, chatId, messageType, chatType);
   }
 }

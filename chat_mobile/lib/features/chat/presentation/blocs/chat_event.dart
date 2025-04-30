@@ -1,4 +1,5 @@
 import 'package:chat_android/features/chat/domain/entities/get_chat_entity.dart';
+import 'package:chat_android/features/chat/domain/entities/get_last_message_entity.dart';
 
 abstract class ChatEvent {}
 
@@ -18,14 +19,17 @@ class GetAllMessageEvent extends ChatEvent {
 }
 
 class MessageReceivedEvent extends ChatEvent {
-  final GetChatEntity message;
+  final GetLastMessageEntity message;
   MessageReceivedEvent({required this.message});
 }
 
 class GetLastMessageEvent extends ChatEvent {
   final String message;
   final String chatId;
-  GetLastMessageEvent(this.message, this.chatId);
+  final String messageType;
+  final String chatType;
+  GetLastMessageEvent(
+      this.message, this.chatId, this.messageType, this.chatType);
 }
 
 class GetLocalChatsEvent extends ChatEvent {}

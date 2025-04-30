@@ -38,7 +38,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
   List<GetChatEntity> chats = [];
   final List<String> _messages = [];
-  List<LocalAllMessagesEntity> localAllMessages = [];
   StreamSubscription? _messageSubscription;
   ChatRemoteDataSource chatRemoteDataSource = ChatRemoteDataSource();
 
@@ -66,16 +65,17 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     try {
       log('sended message in bloc: ${event.chatId}');
       final response = await getAllMessageUsecase.call(event.chatId);
-      response.data?.forEach((element) {
-        localAllMessages.add(LocalAllMessagesEntity(
-            message: element.message,
-            sendedAt: element.sendedAt,
-            photo: element.photo,
-            userId: element.userId));
-      });
+
+      log(response.status.toString());
       if (response.status == 200) {
-        log('chat response bloc: ${response.data}');
-        emit(GetAllMessageSucces(messageEntity: response.data!));
+        var reversedList = response.data?.reversed.toList();
+        reversedList?.forEach((element) {
+          log(' reversed list message: ${element.message}');
+        });
+        log('GetAllMessageSucces emit edilmeden önce');
+        emit(GetAllMessageSucces(messageEntity: reversedList!));
+        log('BlocListener state değişimi: ${state.runtimeType}');
+        log('GetAllMessageSucces emit edildi');
       }
     } catch (err) {
       emit(ChatFailure(errorMessage: err.toString()));
@@ -88,7 +88,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     try {
       log('sended message: ${event.message}');
 
-      await getLastMessageUsecase.call(event.message, event.chatId);
+      await getLastMessageUsecase.call(
+          event.message, event.chatId, event.messageType, event.chatType);
 
       _messages.add(event.message);
       // if (response.status == 200) {
@@ -129,7 +130,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     try {
       final response = await getChatsUsecase.call();
       if (response.status == 200) {
-        log('chat response bloc: ${response.data}');
+        log('chat response bloc: $response');
         chats = response.data!;
         emit(GetChatsSuccess(message: response.message, chats: response.data!));
       } else {

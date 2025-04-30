@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-
-
 class FontSize {
   static const small = 12.0;
   static const standard = 14.0;
@@ -36,11 +34,11 @@ class AppTheme {
           color: DefaultColors.whiteText,
         ),
         bodySmall: TextStyle(
-          fontSize: FontSize.standardUp,
+          fontSize: FontSize.standard,
           color: DefaultColors.whiteText,
         ),
         bodyMedium: TextStyle(
-          fontSize: FontSize.standard,
+          fontSize: FontSize.standardUp,
           color: DefaultColors.whiteText,
         ),
         bodyLarge: TextStyle(

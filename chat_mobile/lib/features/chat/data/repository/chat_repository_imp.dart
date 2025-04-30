@@ -34,9 +34,11 @@ class ChatRepositoryImp implements ChatRepository {
   }
 
   @override
-  Future<void> getLastMessage(String message, String chatId) async {
+  Future<void> getLastMessage(String message, String chatId, String messageType,
+      String chatType) async {
     // final response =
-    await chatRemoteDataSource.getLastMessage(message, chatId);
+    await chatRemoteDataSource.getLastMessage(
+        message, chatId, messageType, chatType);
     // log('repository get last message: ${response.data?.first.message}');
     // log('repository get last message: ${response.status}');
     // return BaseResponseModel<GetChatEntity>(
@@ -49,7 +51,8 @@ class ChatRepositoryImp implements ChatRepository {
   Future<BaseResponseModel<GetLastMessageEntity>> getAllMessage(
       String chatId) async {
     final response = await chatRemoteDataSource.getAllMessage(chatId);
-    return BaseResponseModel(
+
+    return BaseResponseModel<GetLastMessageEntity>(
         message: response.message,
         status: response.status,
         data: response.data);

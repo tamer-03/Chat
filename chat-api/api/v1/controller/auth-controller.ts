@@ -33,7 +33,16 @@ export const signUp = genericFunc(async(req,res,next) => {
 export const signIn = genericFunc(async (req,res,next) => {
 
     const {email,password} = req.body
-    const { device,browser,audience } = res.locals
+
+    const {browser,audience } = res.locals
+    const userAgent = req.headers["user-agent"] || "";
+    console.log(userAgent)
+    const isMobile = /mobile|iphone|android|dart:io/i.test(userAgent);
+    const isTablet = /tablet|ipad/i.test(userAgent);
+    const isDart = /dart:io/i.test(userAgent);
+
+    const device = isDart || isMobile ? DeviceTypes.MOBILE : isTablet ? DeviceTypes.TABLET : DeviceTypes.DESKTOP;
+    console.log(device)
     
     if (!device && !browser) {
         throw new ResponseModel(errorCodes.UNKNOWN_DEVICE, 500);

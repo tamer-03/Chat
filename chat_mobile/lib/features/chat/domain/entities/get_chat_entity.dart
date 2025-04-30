@@ -4,6 +4,7 @@ class GetChatEntity {
   final String? message;
   final String photoUrl;
   final String chatId;
+  final String chatType;
 
   GetChatEntity({
     required this.userId,
@@ -11,5 +12,6 @@ class GetChatEntity {
     required this.message,
     required this.chatId,
     required this.photoUrl,
+    required this.chatType,
   });
 }

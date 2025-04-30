@@ -19,14 +19,14 @@ app.use('/storage', express.static('storage'))
 const server = http.createServer(app)
 const io = new Server(server, {
     cors : {
-        origin : ["http://localhost:3000","http://localhost:3001","http://localhost:3002"],
+        origin : process.env.BASE_URL,
         credentials : true,
     }
 })
 setSocketInstanse(io)
 
 app.use(cors({
-    origin : ["http://localhost:3000","http://localhost:3001","http://localhost:3002"],
+    origin : process.env.BASE_URL,
     methods : "GET,HEAD,PUT,PATCH,POST,DELETE",
     credentials : true
 }))
