@@ -9,7 +9,6 @@ import 'package:chat_android/features/auth/data/datasource/auth_remote_data_sour
 import 'package:chat_android/features/auth/data/repositories/auth_repository_impl.dart';
 import 'package:chat_android/features/chat/data/datasource/chat_remote_data_source.dart';
 import 'package:chat_android/features/chat/data/repository/chat_repository_imp.dart';
-import 'package:chat_android/features/chat/domain/repository/chat_repository.dart';
 import 'package:chat_android/features/friend/data/datasource/friend_remote_socket_datasource.dart';
 import 'package:chat_android/features/friend/data/repositories/friend_repository_imp.dart';
 import 'package:chat_android/features/profile/data/datasource/profile_remote_data_source.dart';

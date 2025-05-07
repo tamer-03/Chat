@@ -52,13 +52,12 @@ export const sendTextMessageHandler = async (data: any, socket: Socket) => {
 
     switch (chat_type) {
       case ChatType.PERSONAL:
-        io.to(chat_id).emit("get_chats_result", {
+      io.to(chat_id).emit("get_chat_messages_result", {
           message: errorCodes.SUCCESS,
           status: 200,
           value: lastMessage,
         } as ResponseModel);
         break;
-
       case ChatType.GROUP:
         const lastGroupMessage = await getLastGroupChatMessage(
           chat_id,
@@ -199,7 +198,7 @@ export const deleteChatMessageHandler = async (data: any, socket: Socket) => {
     const { user_id } = socket.data.user;
 
     await deleteChatMessage(chat_id, chat_message_id);
-
+    console.log("deleted message", chat_message_id);
     io.to(chat_id).emit("get_chat_messages_result", {
       message: errorCodes.SUCCESS,
       status: 200,

@@ -51,6 +51,7 @@ void main() async {
       ProfileRepositoryImp(profileRemoteDataSource: ProfileRemoteDataSource());
   final chatRepository =
       ChatRepositoryImp(chatRemoteDataSource: ChatRemoteDataSource());
+
   runApp(MyApp(
     profileRepository: profileRepository,
     authRepository: authRepository,
@@ -70,6 +71,7 @@ class MyApp extends StatelessWidget {
       required this.friendRepository,
       required this.profileRepository,
       required this.chatRepository});
+
   @override
   Widget build(BuildContext context) {
     return MultiBlocProvider(

@@ -3,15 +3,11 @@ import 'package:chat_android/core/constant/message_types.dart';
 import 'package:chat_android/core/theme.dart';
 import 'package:chat_android/features/chat/domain/entities/get_last_message_entity.dart';
 import 'package:chat_android/features/chat/domain/entities/local_all_messages_entity.dart';
-import 'package:chat_android/features/chat/domain/usecasasses/create_chat_usecase.dart';
 import 'package:chat_android/features/chat/presentation/blocs/chat_bloc.dart';
 import 'package:chat_android/features/chat/presentation/blocs/chat_event.dart';
 import 'package:chat_android/features/chat/presentation/blocs/chat_state.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'dart:developer';
 
@@ -29,9 +25,11 @@ class _ChatPageState extends State<ChatPage> {
   late String _chatId;
   late int _toUserId;
   late String _chatType;
-  List<GetLastMessageEntity> localMessages = [];
   List<LocalAllMessagesEntity> localAllMessages = [];
   final ScrollController _scrollController = ScrollController();
+  FocusNode _focusNode = FocusNode();
+  bool _isEditing = false;
+  String _editingMessageId = '';
 
   @override
   void initState() {
@@ -90,6 +88,7 @@ class _ChatPageState extends State<ChatPage> {
     _storage.delete(key: 'to_userId');
     _storage.delete(key: 'chat_type');
     localAllMessages.clear();
+    _focusNode.dispose();
     super.dispose();
   }
 
@@ -108,11 +107,11 @@ class _ChatPageState extends State<ChatPage> {
   //   log('creating chat');
   // }
 
-  void sendMessageAndGetLastMessage(
-      String message, String chatId, String messageType, String chatType) {
+  void sendMessageAndGetLastMessage(String message, String chatId,
+      String messageType, String chatMessageId, String chatType) {
     log('sendMessageAndGetLastMessage $message');
-    BlocProvider.of<ChatBloc>(context)
-        .add(GetLastMessageEvent(message, chatId, messageType, chatType));
+    BlocProvider.of<ChatBloc>(context).add(GetLastMessageEvent(
+        message, chatId, messageType, chatType, chatMessageId));
   }
 
   @override
@@ -142,21 +141,30 @@ class _ChatPageState extends State<ChatPage> {
             return Center(child: CircularProgressIndicator());
           } else if (state is ChatFailure) {
             return Center(child: Text(state.errorMessage));
+          } else if (state is GetLastMessageSucces) {
+            return Column(children: [
+              Expanded(
+                child: _buildListMessages(state.messageEntity),
+              ),
+              _buildMessageInput()
+            ]);
+          } else if (state is GetAllMessageSucces) {
+            return Column(children: [
+              Expanded(child: _buildListMessages(state.messageEntity)),
+              _buildMessageInput()
+            ]);
           }
-          return Column(children: [
-            Expanded(child: _buildListMessages(localAllMessages)),
-            _buildMessageInput()
-          ]);
+
+          return Column(
+            children: [
+              Center(
+                child: Text('hata'),
+              )
+            ],
+          );
         }, listener: (context, state) {
           log('BlocListener state değişimi: ${state.runtimeType}');
           if (state is GetLastMessageSucces) {
-            setState(() {
-              localAllMessages.add(LocalAllMessagesEntity(
-                  message: state.messageEntity.message ?? '',
-                  sendedAt: DateTime.now(),
-                  photo: state.messageEntity.photo,
-                  userId: state.messageEntity.userId));
-            });
             WidgetsBinding.instance.addPostFrameCallback((_) {
               _scrollController
                   .jumpTo(_scrollController.position.maxScrollExtent);
@@ -165,37 +173,57 @@ class _ChatPageState extends State<ChatPage> {
           } else if (state is GetAllMessageSucces) {
             log(' getAllMessageSucces UI ');
             setState(() {
-              log('getAllMessageSucces $localAllMessages');
-              localAllMessages.addAll(state.messageEntity.map((e) {
-                return LocalAllMessagesEntity(
-                    message: e.message,
-                    sendedAt: e.sendedAt,
-                    photo: e.photo,
-                    userId: e.userId);
-              }).toList());
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 _scrollController
                     .jumpTo(_scrollController.position.maxScrollExtent);
               });
             });
+          } else if (state is MessageDeleteSuccess) {
+            log('message delete success');
+            setState(() {
+              localAllMessages.removeWhere(
+                  (element) => element.chatMessageId == state.isDeleted);
+            });
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _scrollController
+                  .jumpTo(_scrollController.position.maxScrollExtent);
+            });
           }
         }));
   }
 
-  Widget _buildListMessages(List<LocalAllMessagesEntity> messages) {
-    return ListView.builder(
-      controller: _scrollController,
-      itemCount: messages.length,
-      itemBuilder: (context, index) {
-        final message = messages[index];
-        if (message.userId == _toUserId) {
-          return _buildReceivedMessage(
-              context, message.message, message.sendedAt);
-        } else {
-          return _buildSentMessage(context, message.message, message.sendedAt);
-        }
-      },
-    );
+  Widget _buildListMessages(List<GetLastMessageEntity> messages) {
+    if (messages.isEmpty) {
+      return Center(
+        child: Text(
+          'No messages yet',
+          style: TextStyle(color: Colors.grey),
+        ),
+      );
+    } else {
+      return ListView.builder(
+        controller: _scrollController,
+        itemCount: messages.length,
+        itemBuilder: (context, index) {
+          final message = messages[index];
+          if (message.userId == _toUserId) {
+            return _buildReceivedMessage(
+              context,
+              message.message,
+              message.sendedAt,
+            );
+          } else {
+            return _buildSentMessage(
+              context,
+              message.message,
+              message.sendedAt,
+              message.chatId,
+              message.chatMessageId,
+            );
+          }
+        },
+      );
+    }
   }
 
   Widget _buildMessageInput() {
@@ -234,14 +262,30 @@ class _ChatPageState extends State<ChatPage> {
               color: Colors.grey,
             ),
             onTap: () {
+              final messageInput = _messageController.text;
+              if (messageInput.isEmpty) return;
+              if (_isEditing) {
+                sendMessageAndGetLastMessage(
+                  messageInput,
+                  _chatId,
+                  MessageTypes.edit,
+                  _editingMessageId,
+                  '',
+                );
+                setState(() {
+                  _isEditing = false;
+                  _editingMessageId = '';
+                });
+                return;
+              }
               log('chat_type: $_chatType');
               if (_chatType == ChatTypes.personal) {
                 sendMessageAndGetLastMessage(_messageController.text, _chatId,
-                    MessageTypes.text, _chatType);
+                    MessageTypes.text, '', _chatType);
                 _messageController.clear();
               } else if (_chatType == ChatTypes.group) {
                 sendMessageAndGetLastMessage(_messageController.text, _chatId,
-                    MessageTypes.text, _chatType);
+                    MessageTypes.text, '', _chatType);
                 _messageController.clear();
               }
             },
@@ -251,8 +295,85 @@ class _ChatPageState extends State<ChatPage> {
     );
   }
 
+  Widget _buildSentMessage(BuildContext context, String? message, DateTime date,
+      String chatId, String chatMessageId) {
+    if (message != null) {
+      return Align(
+        alignment: Alignment.centerRight,
+        child: GestureDetector(
+          onLongPress: () {
+            showMenu(
+              context: context,
+              position: RelativeRect.fromLTRB(1000, 500, 10, 0),
+              items: [
+                PopupMenuItem(
+                  value: MessageTypes.delete,
+                  child: Text('Delete'),
+                ),
+                PopupMenuItem(
+                  value: MessageTypes.edit,
+                  child: Text('Edit'),
+                )
+              ],
+            ).then(
+              (value) {
+                if (value == MessageTypes.delete) {
+                  log('delete message');
+                  sendMessageAndGetLastMessage(
+                      '', chatId, MessageTypes.delete, chatMessageId, '');
+                } else if (value == MessageTypes.edit) {
+                  setState(() {
+                    _messageController.text = message;
+                    _isEditing = true;
+                    _editingMessageId = chatMessageId;
+                  });
+                  log('edit message');
+                  //var editMessage = _messageController.text;
+                  _focusNode.requestFocus();
+                  // sendMessageAndGetLastMessage(
+                  //     editMessage, chatId, '', chatMessageId, '');
+                  //editing message
+                }
+              },
+            );
+          },
+          child: Container(
+            constraints: BoxConstraints(
+              maxWidth: MediaQuery.of(context).size.width * 0.7,
+            ),
+            margin: EdgeInsets.only(right: 16, top: 4, bottom: 4, left: 60),
+            padding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: DefaultColors.senderMessage,
+              borderRadius: BorderRadius.only(
+                topRight: Radius.circular(2),
+                bottomLeft: Radius.circular(18),
+                topLeft: Radius.circular(18),
+                bottomRight: Radius.circular(18),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(message, style: Theme.of(context).textTheme.bodyMedium),
+                SizedBox(height: 3),
+                Text(_formatMessageTime(date),
+                    style: Theme.of(context).textTheme.bodySmall),
+              ],
+            ),
+          ),
+        ),
+      );
+    } else {
+      return Container();
+    }
+  }
+
   Widget _buildReceivedMessage(
-      BuildContext context, String message, DateTime date) {
+    BuildContext context,
+    String? message,
+    DateTime date,
+  ) {
     return Align(
       alignment: Alignment.centerLeft,
       child: Container(
@@ -273,39 +394,7 @@ class _ChatPageState extends State<ChatPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(message, style: Theme.of(context).textTheme.bodyMedium),
-            SizedBox(height: 3),
-            Text(_formatMessageTime(date),
-                style: Theme.of(context).textTheme.bodySmall),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSentMessage(
-      BuildContext context, String message, DateTime date) {
-    return Align(
-      alignment: Alignment.centerRight,
-      child: Container(
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.7,
-        ),
-        margin: EdgeInsets.only(right: 16, top: 4, bottom: 4, left: 60),
-        padding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: DefaultColors.senderMessage,
-          borderRadius: BorderRadius.only(
-            topRight: Radius.circular(2),
-            bottomLeft: Radius.circular(18),
-            topLeft: Radius.circular(18),
-            bottomRight: Radius.circular(18),
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Text(message, style: Theme.of(context).textTheme.bodyMedium),
+            Text(message!, style: Theme.of(context).textTheme.bodyMedium),
             SizedBox(height: 3),
             Text(_formatMessageTime(date),
                 style: Theme.of(context).textTheme.bodySmall),

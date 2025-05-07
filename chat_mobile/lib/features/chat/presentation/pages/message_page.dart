@@ -3,7 +3,6 @@ import 'package:chat_android/features/chat/domain/entities/get_chat_entity.dart'
 import 'package:chat_android/features/chat/presentation/blocs/chat_bloc.dart';
 import 'package:chat_android/features/chat/presentation/blocs/chat_event.dart';
 import 'package:chat_android/features/chat/presentation/blocs/chat_state.dart';
-import 'package:chat_android/features/chat/presentation/pages/chat_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -148,6 +147,7 @@ class _MessagePageState extends State<MessagePage> {
               joinChat(chat.chatId);
               storage.write(key: 'chatId', value: chat.chatId);
               storage.write(key: 'username', value: chat.username);
+
               storage.write(key: 'to_userId', value: chat.userId.toString());
               storage.write(key: 'chat_type', value: chat.chatType);
               await Navigator.pushNamed(context, '/chat');

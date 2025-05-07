@@ -14,7 +14,7 @@ class GetLastMessageModel extends GetLastMessageEntity {
 
   factory GetLastMessageModel.fromJson(Map<String, dynamic> json) {
     return GetLastMessageModel(
-      chatImage: json['chat_image'] ?? 'null',
+      chatImage: json['chat_image'] ?? 'empty',
       message: json['message'],
       sendedAt: DateTime.parse(json['sended_at']),
       chatId: json['chat_id'],

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:chat_android/core/base_response.dart';
+import 'package:chat_android/core/constant/message_types.dart';
 import 'package:chat_android/core/constant/storage_keys.dart';
 import 'package:chat_android/features/chat/data/models/get_chat_model.dart';
 import 'package:chat_android/features/chat/data/models/get_last_message_model.dart';
@@ -9,19 +10,40 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 import 'dart:developer';
 
+class MessageChangeControllerModel {
+  String messageId;
+  String? message;
+  MessageChangeControllerModel({
+    required this.messageId,
+    this.message,
+  });
+}
+
 class ChatRemoteDataSource {
   static final ChatRemoteDataSource _instance =
       ChatRemoteDataSource._internal();
   factory ChatRemoteDataSource() => _instance;
   ChatRemoteDataSource._internal();
   io.Socket? _socket;
+
   final StreamController<GetLastMessageModel> _messageController =
       StreamController<GetLastMessageModel>.broadcast();
 
+  final StreamController<MessageChangeControllerModel>
+      _messageChangeController =
+      StreamController<MessageChangeControllerModel>.broadcast();
+
   Stream<GetLastMessageModel> get messageStream => _messageController.stream;
+  Stream<MessageChangeControllerModel> get messageChangeStream =>
+      _messageChangeController.stream;
 
   final _storage = FlutterSecureStorage();
   final _baseUrl = dotenv.env['BASE_URL'];
+  BaseResponseModel<GetLastMessageModel> localAllMessage =
+      BaseResponseModel<GetLastMessageModel>(
+          message: 'no data', status: 400, data: null);
+  String _deleteChatMessageId = '';
+  String _message = '';
 
   Future<bool> connect() async {
     if (_socket != null && _socket!.connected) {
@@ -62,97 +84,188 @@ class ChatRemoteDataSource {
     if (_socket == null || !_socket!.connected) {
       await connect();
     }
+
     log('datasource gets message');
     Completer<BaseResponseModel<GetLastMessageModel>> completer = Completer();
+
+    BaseResponseModel<GetLastMessageModel> responseModel;
+
     _socket?.emit('get_chat_messages', {'chat_id': chatId});
-    _socket?.once('get_chat_messages_result', (data) {
+
+    _socket?.off('get_chat_messages_result');
+    _socket?.on('get_chat_messages_result', (data) {
       log('data getAllMesage datasource : $data');
 
       if (data != null && data is Map<String, dynamic>) {
-        final responseModel = BaseResponseModel.fromJson(
+        responseModel = BaseResponseModel.fromJson(
           data,
           (json) => GetLastMessageModel.fromJson(json),
         );
-        log('gelen yanıt ${responseModel.data?.first}');
+
         if (responseModel.status == 200) {
-          completer.complete(responseModel);
+          final messages = responseModel.data;
+
+          if (!completer.isCompleted) {
+            localAllMessage = responseModel;
+            completer.complete(responseModel);
+            log('localAllMessage: ${localAllMessage.data}');
+            return;
+          }
+
+          log('chatMessageId: $_deleteChatMessageId');
+          if (localAllMessage.data != null && messages != null) {
+            log('localAllMessage: ${localAllMessage.data!.length}');
+            log('messages: ${messages.length}');
+            if (localAllMessage.data!.length > messages.length &&
+                _deleteChatMessageId == '') {
+              log('message ekelndi');
+              _messageController.add(messages.first);
+              localAllMessage.data!.add(messages.first);
+            } else if (_deleteChatMessageId != '') {
+              if (_message.isNotEmpty) {
+                log('message not empty');
+                MessageChangeControllerModel messageChange =
+                    MessageChangeControllerModel(
+                  messageId: _deleteChatMessageId,
+                  message: _message,
+                );
+                _deleteChatMessageId = '';
+                _message = '';
+                _messageChangeController.add(messageChange);
+              } else {
+                MessageChangeControllerModel messageChange =
+                    MessageChangeControllerModel(
+                  messageId: _deleteChatMessageId,
+                );
+                _messageChangeController.add(messageChange);
+                localAllMessage.data!.removeWhere(
+                    (element) => element.chatMessageId == _deleteChatMessageId);
+                _deleteChatMessageId = '';
+                log('message silindi');
+                log('chatMessageId: $_deleteChatMessageId');
+              }
+            }
+          }
         } else {
-          completer.completeError(responseModel.message);
+          if (!completer.isCompleted) {
+            completer.completeError(responseModel.message);
+          }
         }
       }
     });
 
-    Future.delayed(Duration(seconds: 5), () {
-      if (!completer.isCompleted) {
-        completer.completeError('Timeout: No response from server.');
-      }
-    });
     return completer.future;
   }
 
-  Future<void> getLastMessage(String message, String chatId, String messageType,
-      String chatType) async {
+  Future<void> getLastMessage(String? message, String chatId,
+      String messageType, String? chatMessageId, String? chatType) async {
     if (_socket == null || !_socket!.connected) {
       await connect();
     }
 
     Completer<BaseResponseModel<GetChatModel>> completer = Completer();
-    _socket?.emit('send_chat_message', {
-      'message': message,
-      'chat_id': chatId,
-      'message_type': messageType,
-      'chat_type': chatType
-    });
-    log('mesaj gönderme isteği yollandı');
-    _socket?.on(
-      'send_chat_message_result',
-      (data) {
-        _socket?.off('notification_channel');
-        if (data != null && data is Map<String, dynamic>) {
-          try {
-            final responseModel = BaseResponseModel.fromJson(
-              data,
-              (json) => (json),
-            );
-            log('response value: ${responseModel.data?.length}');
-            if (responseModel.status == 400) {
-              completer.completeError(
-                  Exception('JSON Parsing Error: ${responseModel.message}'));
+    log(messageType);
+    switch (messageType) {
+      case MessageTypes.text:
+        _socket?.emit('send_chat_message', {
+          'message': message,
+          'chat_id': chatId,
+          'message_type': messageType,
+          'chat_type': chatType
+        });
+
+        log('mesaj gönderme isteği yollandı');
+        _socket?.once(
+          'notification_channel',
+          (data) {
+            if (data != null && data is Map<String, dynamic>) {
+              try {
+                final responseModel = BaseResponseModel.fromJson(
+                  data,
+                  (json) => (json),
+                );
+                log('response value: ${responseModel.data?.length}');
+                if (responseModel.status == 400) {
+                  completer.completeError(Exception(
+                      'JSON Parsing Error: ${responseModel.message}'));
+                }
+              } catch (err) {
+                log('❌ JSON dönüşüm hatası: $err');
+              }
             }
-          } catch (err) {
-            log('❌ JSON dönüşüm hatası: $err');
-          }
-        }
-      },
-    );
-    _listenIncomingMessage();
+          },
+        );
+        break;
+      case MessageTypes.image:
+        log('image message');
+        break;
+      case MessageTypes.edit:
+        _socket?.emit('send_chat_message', {
+          'chat_id': chatId,
+          'message_type': messageType,
+          'chat_message_id': chatMessageId,
+          'message': message,
+        });
+
+        _message = message!;
+        _deleteChatMessageId = chatMessageId!;
+        log('edit message');
+        _getEditChatMessages();
+        break;
+      case MessageTypes.delete:
+        _socket?.emit('send_chat_message', {
+          'chat_message_id': chatMessageId,
+          'chat_id': chatId,
+          'message_type': messageType,
+        });
+        _deleteChatMessageId = chatMessageId!;
+        log('localAllMessage: ${localAllMessage.data!.length}');
+        _getChatMessages();
+
+        break;
+      default:
+        log('unknown message type');
+    }
   }
 
-  void _listenIncomingMessage() {
-    _socket?.off('get_chats_result');
-
-    _socket?.on('get_chats_result', (data) {
-      //_socket?.off('get_chat_messages_result');
+  void _getEditChatMessages() {
+    Completer<BaseResponseModel> completer = Completer();
+    _socket?.once('edit_chat_message_result', (data) {
+      log('delete chat message result: $data');
       if (data != null && data is Map<String, dynamic>) {
-        log('data not null');
         try {
           final responseModel = BaseResponseModel.fromJson(
             data,
-            (json) => GetLastMessageModel.fromJson(json),
+            (json) => (json),
           );
           if (responseModel.status == 200) {
-            log('gelen mesaj: ${responseModel.data?.first.message}');
-            log('mdeol: $responseModel');
-            final lastMessage = responseModel.data?.first;
-            if (lastMessage != null) {
-              _messageController.add(lastMessage);
-            }
+            completer.complete(responseModel);
+            log('message güncellendi');
           }
         } catch (err) {
           log('❌ JSON dönüşüm hatası: $err');
         }
-      } else {
-        log('❌ data is null or not Map<String, dynamic>');
+      }
+    });
+  }
+
+  void _getChatMessages() {
+    Completer<BaseResponseModel> completer = Completer();
+    _socket?.once('delete_chat_message_result', (data) {
+      log('delete chat message result: $data');
+      if (data != null && data is Map<String, dynamic>) {
+        try {
+          final responseModel = BaseResponseModel.fromJson(
+            data,
+            (json) => (json),
+          );
+          if (responseModel.status == 200) {
+            completer.complete(responseModel);
+            log('message silindi');
+          }
+        } catch (err) {
+          log('❌ JSON dönüşüm hatası: $err');
+        }
       }
     });
   }
@@ -173,8 +286,8 @@ class ChatRemoteDataSource {
     Completer<BaseResponseModel<GetChatModel>> completer = Completer();
     _socket?.emit('get_chats', {});
     _socket?.on('get_chats_result', (data) {
-      log('data $data');
       _socket?.off('get_chats_result');
+      log('data $data');
       if (data != null && data is Map<String, dynamic>) {
         try {
           BaseResponseModel<GetChatModel> responseModel =

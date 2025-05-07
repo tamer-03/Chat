@@ -1,4 +1,3 @@
-import 'package:chat_android/core/constant/chat_types.dart';
 import 'package:chat_android/features/chat/presentation/blocs/chat_bloc.dart';
 import 'package:chat_android/features/chat/presentation/blocs/chat_event.dart';
 import 'package:chat_android/features/chat/presentation/blocs/chat_state.dart';
@@ -74,6 +73,10 @@ class _FirendListPageState extends State<FirendListPage> {
                 final chatUserId =
                     state.chats.firstWhere((chat) => chat.userId == selectedId);
                 log('chatId: ${chatUserId.chatId}');
+                log('chatType: ${chatUserId.chatType}');
+                log('userId: ${chatUserId.userId}');
+                _storage.write(
+                    key: 'to_userId', value: chatUserId.userId.toString());
                 _storage.write(
                     key: 'chatId', value: chatUserId.chatId.toString());
                 _storage.write(

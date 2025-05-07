@@ -5,7 +5,7 @@ class GetLastMessageEntity {
   final String chatMessageId;
   final String chatId;
   final String? chatImage;
-  final String message;
+  String? message;
   final DateTime sendedAt;
   final String chatType;
 

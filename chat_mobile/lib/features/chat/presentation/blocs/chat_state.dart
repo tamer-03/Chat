@@ -20,14 +20,20 @@ class GetChatsSuccess extends ChatState {
 class GetAllMessageSucces extends ChatState {
   final List<GetLastMessageEntity> messageEntity;
 
-  @override
-  List<Object?> get props => [messageEntity];
-  GetAllMessageSucces({required this.messageEntity});
+  GetAllMessageSucces(this.messageEntity);
 }
 
-class GetLastMessageSucces extends ChatState {
-  final GetLastMessageEntity messageEntity;
+class GetLastMessageSucces extends ChatState with EquatableMixin {
+  final List<GetLastMessageEntity> messageEntity;
   GetLastMessageSucces({required this.messageEntity});
+
+  @override
+  List<Object?> get props => [messageEntity];
+}
+
+class MessageDeleteSuccess extends ChatState {
+  final String isDeleted;
+  MessageDeleteSuccess({required this.isDeleted});
 }
 
 class ChatUpdate extends ChatState {

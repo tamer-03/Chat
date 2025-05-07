@@ -1,8 +1,9 @@
 import 'dart:async';
 
+import 'package:chat_android/core/constant/message_types.dart';
 import 'package:chat_android/features/chat/data/datasource/chat_remote_data_source.dart';
 import 'package:chat_android/features/chat/domain/entities/get_chat_entity.dart';
-import 'package:chat_android/features/chat/domain/entities/local_all_messages_entity.dart';
+import 'package:chat_android/features/chat/domain/entities/get_last_message_entity.dart';
 import 'package:chat_android/features/chat/domain/usecasasses/create_chat_usecase.dart';
 import 'package:chat_android/features/chat/domain/usecasasses/get_all_message_usecase.dart';
 import 'package:chat_android/features/chat/domain/usecasasses/get_chats_usecase.dart';
@@ -33,30 +34,86 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<GetLastMessageEvent>(_onGetLastMessage);
     on<GetAllMessageEvent>(_onGetAllMessage);
     on<MessageReceivedEvent>(_onMessageReceived);
+    on<MessageChangeEvent>(_onMessageChanged);
 
     _onInitMessageListener();
+    _onChangeMessageListener();
   }
   List<GetChatEntity> chats = [];
   final List<String> _messages = [];
   StreamSubscription? _messageSubscription;
+  StreamSubscription? _changeMessageSubscription;
+  List<GetLastMessageEntity> localMessages = [];
   ChatRemoteDataSource chatRemoteDataSource = ChatRemoteDataSource();
 
   @override
   Future<void> close() {
     _messageSubscription?.cancel();
+    _changeMessageSubscription?.cancel();
+    localMessages.clear();
     return super.close();
   }
 
   void _onInitMessageListener() {
     _messageSubscription = chatRemoteDataSource.messageStream.listen((message) {
       add(MessageReceivedEvent(message: message));
+      log('init message listener ${message.message}');
     });
   }
 
   void _onMessageReceived(MessageReceivedEvent event, Emitter<ChatState> emit) {
-    _messages.add(event.message.message ?? '');
-    log('message received: ${event.message}');
-    emit(GetLastMessageSucces(messageEntity: event.message));
+    log('local message lenght: ${localMessages.length}');
+
+    localMessages.add(event.message);
+    log('local message lenght: ${localMessages.length}');
+
+    log('message received listner: ${event.message.message}');
+    emit(GetLastMessageSucces(messageEntity: List.from(localMessages)));
+  }
+
+  void _onChangeMessageListener() {
+    _changeMessageSubscription =
+        chatRemoteDataSource.messageChangeStream.listen((chatMessageId) {
+      log('delete message listener');
+      if (chatMessageId.message == null) {
+        log('delete message listener message null');
+        add(
+          MessageChangeEvent(
+            chatMessageId: chatMessageId.messageId,
+          ),
+        );
+      } else {
+        log('delete message listener message not null');
+        add(MessageChangeEvent(
+          chatMessageId: chatMessageId.messageId,
+          message: chatMessageId.message,
+        ));
+      }
+    });
+  }
+
+  void _onMessageChanged(MessageChangeEvent event, Emitter<ChatState> emit) {
+    log('event null int onmessage deleted bloc');
+    if (event.chatMessageId.isNotEmpty) {
+      log('event not null ${event.chatMessageId}');
+      log('local message lenght: ${localMessages.length}');
+      if (event.message != null) {
+        localMessages
+            .firstWhere(
+                (messgeId) => messgeId.chatMessageId == event.chatMessageId)
+            .message = event.message;
+      } else {
+        log('event message null');
+        localMessages.removeWhere((message) {
+          log('message chat id: ${message.chatMessageId}');
+          log('event chat id: ${event.chatMessageId}');
+          return message.chatMessageId == event.chatMessageId;
+        });
+      }
+
+      log('local message lenght: ${localMessages.length}');
+      emit(GetLastMessageSucces(messageEntity: localMessages));
+    }
   }
 
   Future<void> _onGetAllMessage(
@@ -66,18 +123,26 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       log('sended message in bloc: ${event.chatId}');
       final response = await getAllMessageUsecase.call(event.chatId);
 
-      log(response.status.toString());
       if (response.status == 200) {
+        if (response.data == null || response.data!.isEmpty) {
+          emit(GetAllMessageSucces([]));
+          return;
+        }
         var reversedList = response.data?.reversed.toList();
         reversedList?.forEach((element) {
           log(' reversed list message: ${element.message}');
         });
         log('GetAllMessageSucces emit edilmeden önce');
-        emit(GetAllMessageSucces(messageEntity: reversedList!));
+        if (reversedList != null) {
+          localMessages.clear();
+          localMessages.addAll(reversedList);
+          emit(GetAllMessageSucces(localMessages));
+        }
         log('BlocListener state değişimi: ${state.runtimeType}');
         log('GetAllMessageSucces emit edildi');
       }
     } catch (err) {
+      log('GetAllMessageEvent error: ${err.toString()}');
       emit(ChatFailure(errorMessage: err.toString()));
     }
   }
@@ -87,9 +152,36 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     emit(ChatLoading());
     try {
       log('sended message: ${event.message}');
-
-      await getLastMessageUsecase.call(
-          event.message, event.chatId, event.messageType, event.chatType);
+      log('sended message type: ${event.messageType}');
+      log('chat type: ${event.chatType}');
+      switch (event.messageType) {
+        case MessageTypes.text:
+          await getLastMessageUsecase.call(
+            event.message,
+            event.chatId,
+            event.messageType,
+            '',
+            event.chatType,
+          );
+          break;
+        case MessageTypes.delete:
+          await getLastMessageUsecase.call(
+            '',
+            event.chatId,
+            event.messageType,
+            event.chatMessageId,
+            '',
+          );
+          break;
+        case MessageTypes.edit:
+          await getLastMessageUsecase.call(
+            event.message,
+            event.chatId,
+            event.messageType,
+            event.chatMessageId,
+            '',
+          );
+      }
 
       _messages.add(event.message);
       // if (response.status == 200) {
