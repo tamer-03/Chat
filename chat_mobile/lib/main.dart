@@ -5,6 +5,7 @@ import 'package:chat_android/features/chat/domain/usecasasses/get_all_message_us
 import 'package:chat_android/features/chat/domain/usecasasses/get_chats_usecase.dart';
 import 'package:chat_android/features/chat/domain/usecasasses/get_last_message_usecase.dart';
 import 'package:chat_android/features/chat/domain/usecasasses/join_chat_usecase.dart';
+import 'package:chat_android/features/chat/domain/usecasasses/message_seen_usecase.dart';
 import 'package:chat_android/features/chat/presentation/blocs/chat_bloc.dart';
 import 'package:chat_android/features/chat/presentation/pages/chat_page.dart';
 import 'package:chat_android/core/theme.dart';
@@ -112,7 +113,9 @@ class MyApp extends StatelessWidget {
                 createChatUsecase: CreateChatUsecase(chatRepository),
                 getChatsUsecase:
                     GetChatsUsecase(chatRepository: chatRepository),
-                joinChatUsecase: JoinChatUsecase(repository: chatRepository)))
+                joinChatUsecase: JoinChatUsecase(repository: chatRepository),
+                messageSeenUsecase:
+                    MessageSeenUsecase(repository: chatRepository)))
       ],
       child: MaterialApp(
         title: 'Chat Mobile',

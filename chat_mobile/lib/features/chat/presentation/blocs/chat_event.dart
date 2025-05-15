@@ -1,10 +1,17 @@
 import 'package:chat_android/features/chat/domain/entities/get_last_message_entity.dart';
+import 'package:chat_android/features/chat/domain/entities/get_seem_message_entity.dart';
 
 abstract class ChatEvent {}
 
 class ChatCreateEvent extends ChatEvent {
   final int userId;
   ChatCreateEvent(this.userId);
+}
+
+class MessageSeenEvent extends ChatEvent {
+  final String chatMessageId;
+  final String chatId;
+  MessageSeenEvent({required this.chatMessageId, required this.chatId});
 }
 
 class JoinChatEvent extends ChatEvent {
@@ -26,6 +33,11 @@ class MessageChangeEvent extends ChatEvent {
   final String chatMessageId;
   final String? message;
   MessageChangeEvent({required this.chatMessageId, this.message});
+}
+
+class MessageSeenListenerEvent extends ChatEvent {
+  final List<GetSeemMessageEntity> isSeen;
+  MessageSeenListenerEvent({required this.isSeen});
 }
 
 class GetLastMessageEvent extends ChatEvent {

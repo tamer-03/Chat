@@ -1,14 +1,18 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:chat_android/core/constant/message_types.dart';
 import 'package:chat_android/features/chat/data/datasource/chat_remote_data_source.dart';
 import 'package:chat_android/features/chat/domain/entities/get_chat_entity.dart';
 import 'package:chat_android/features/chat/domain/entities/get_last_message_entity.dart';
+import 'package:chat_android/features/chat/domain/entities/get_seem_message_entity.dart';
+import 'package:chat_android/features/chat/domain/entities/local_all_messages_entity.dart';
 import 'package:chat_android/features/chat/domain/usecasasses/create_chat_usecase.dart';
 import 'package:chat_android/features/chat/domain/usecasasses/get_all_message_usecase.dart';
 import 'package:chat_android/features/chat/domain/usecasasses/get_chats_usecase.dart';
 import 'package:chat_android/features/chat/domain/usecasasses/get_last_message_usecase.dart';
 import 'package:chat_android/features/chat/domain/usecasasses/join_chat_usecase.dart';
+import 'package:chat_android/features/chat/domain/usecasasses/message_seen_usecase.dart';
 import 'package:chat_android/features/chat/presentation/blocs/chat_event.dart';
 import 'package:chat_android/features/chat/presentation/blocs/chat_state.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -20,12 +24,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   JoinChatUsecase joinChatUsecase;
   GetLastMessageUsecase getLastMessageUsecase;
   GetAllMessageUsecase getAllMessageUsecase;
+  MessageSeenUsecase messageSeenUsecase;
   ChatBloc(
       {required this.createChatUsecase,
       required this.getChatsUsecase,
       required this.joinChatUsecase,
       required this.getLastMessageUsecase,
-      required this.getAllMessageUsecase})
+      required this.getAllMessageUsecase,
+      required this.messageSeenUsecase})
       : super(ChatInitial()) {
     on<ChatCreateEvent>(_onCreateChat);
     on<GetChatsEvent>(_onGetChats);
@@ -35,22 +41,31 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<GetAllMessageEvent>(_onGetAllMessage);
     on<MessageReceivedEvent>(_onMessageReceived);
     on<MessageChangeEvent>(_onMessageChanged);
+    on<MessageSeenEvent>(_onMessageSeen);
+    on<MessageSeenListenerEvent>(_onMessageSeenListenerEvent);
 
     _onInitMessageListener();
     _onChangeMessageListener();
+    _onMessageSeenListener();
   }
   List<GetChatEntity> chats = [];
   final List<String> _messages = [];
   StreamSubscription? _messageSubscription;
   StreamSubscription? _changeMessageSubscription;
+  StreamSubscription? _seenMessageSubscription;
   List<GetLastMessageEntity> localMessages = [];
   ChatRemoteDataSource chatRemoteDataSource = ChatRemoteDataSource();
+  final List<GetSeemMessageEntity> _seemedMessages = [];
+  List<String> localSeemedMessages = [];
 
   @override
   Future<void> close() {
     _messageSubscription?.cancel();
     _changeMessageSubscription?.cancel();
+    _seenMessageSubscription?.cancel();
     localMessages.clear();
+    localSeemedMessages.clear();
+    _seemedMessages.clear();
     return super.close();
   }
 
@@ -68,7 +83,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     log('local message lenght: ${localMessages.length}');
 
     log('message received listner: ${event.message.message}');
-    emit(GetLastMessageSucces(messageEntity: List.from(localMessages)));
+    emit(GetLastMessageSucces(
+        messageEntity: List.from(localMessages),
+        isSeenMessage: localSeemedMessages));
   }
 
   void _onChangeMessageListener() {
@@ -112,7 +129,48 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       }
 
       log('local message lenght: ${localMessages.length}');
-      emit(GetLastMessageSucces(messageEntity: localMessages));
+      emit(GetLastMessageSucces(
+          messageEntity: localMessages, isSeenMessage: localSeemedMessages));
+    }
+  }
+
+  void _onMessageSeenListener() {
+    _seenMessageSubscription =
+        chatRemoteDataSource.messageSeenStream.listen((messageSeen) {
+      log('Message seen received: ${messageSeen.length} messages');
+
+      if (messageSeen.isNotEmpty) {
+        // Add new seen messages without clearing the list
+        for (var message in messageSeen) {
+          if (!_seemedMessages
+              .any((m) => m.chatMessageId == message.chatMessageId)) {
+            _seemedMessages.add(message);
+          }
+        }
+
+        // Update local seen messages list
+        localSeemedMessages =
+            _seemedMessages.map((msg) => msg.chatMessageId).toList();
+
+        // Emit new state
+        add(MessageSeenListenerEvent(isSeen: _seemedMessages));
+      }
+    });
+  }
+
+  void _onMessageSeenListenerEvent(
+      MessageSeenListenerEvent event, Emitter<ChatState> emit) {
+    log('Updating seen messages state: ${event.isSeen.length} messages');
+    emit(MessageSeenSuccess(
+        isSeenMessage: localSeemedMessages, messageEntity: localMessages));
+  }
+
+  Future<void> _onMessageSeen(
+      MessageSeenEvent event, Emitter<ChatState> emit) async {
+    try {
+      await messageSeenUsecase.call(event.chatMessageId, event.chatId);
+    } catch (err) {
+      emit(ChatFailure(errorMessage: err.toString()));
     }
   }
 
@@ -120,12 +178,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       GetAllMessageEvent event, Emitter<ChatState> emit) async {
     emit(ChatLoading());
     try {
-      log('sended message in bloc: ${event.chatId}');
+      log('getall message in bloc: ${event.chatId}');
       final response = await getAllMessageUsecase.call(event.chatId);
 
       if (response.status == 200) {
         if (response.data == null || response.data!.isEmpty) {
-          emit(GetAllMessageSucces([]));
+          emit(GetAllMessageSucces([], []));
           return;
         }
         var reversedList = response.data?.reversed.toList();
@@ -134,9 +192,17 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         });
         log('GetAllMessageSucces emit edilmeden önce');
         if (reversedList != null) {
+          // Store current seen messages
+          final currentSeenMessages = List<String>.from(localSeemedMessages);
+
+          // Update messages
           localMessages.clear();
           localMessages.addAll(reversedList);
-          emit(GetAllMessageSucces(localMessages));
+
+          // Restore seen messages
+          localSeemedMessages = currentSeenMessages;
+
+          emit(GetAllMessageSucces(localMessages, localSeemedMessages));
         }
         log('BlocListener state değişimi: ${state.runtimeType}');
         log('GetAllMessageSucces emit edildi');
@@ -154,6 +220,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       log('sended message: ${event.message}');
       log('sended message type: ${event.messageType}');
       log('chat type: ${event.chatType}');
+
+      // Store current seen messages
+      final currentSeenMessages = List<String>.from(localSeemedMessages);
+
       switch (event.messageType) {
         case MessageTypes.text:
           await getLastMessageUsecase.call(
@@ -184,13 +254,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       }
 
       _messages.add(event.message);
-      // if (response.status == 200) {
-      //   log('chat response bloc: ${response.data!.first}');
 
-      //   emit(GetLastMessageSucces(messageEntity: response.data!.first));
-      // } else {
-      //   emit(ChatFailure(errorMessage: response.message));
-      // }
+      // Restore seen messages
+      localSeemedMessages = currentSeenMessages;
+
+      // Emit state with preserved seen messages
+      emit(GetLastMessageSucces(
+          messageEntity: localMessages, isSeenMessage: localSeemedMessages));
     } catch (err) {
       emit(ChatFailure(errorMessage: err.toString()));
     }

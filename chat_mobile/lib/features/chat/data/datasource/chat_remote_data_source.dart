@@ -5,6 +5,7 @@ import 'package:chat_android/core/constant/message_types.dart';
 import 'package:chat_android/core/constant/storage_keys.dart';
 import 'package:chat_android/features/chat/data/models/get_chat_model.dart';
 import 'package:chat_android/features/chat/data/models/get_last_message_model.dart';
+import 'package:chat_android/features/chat/data/models/get_seem_message_model.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
@@ -24,15 +25,19 @@ class ChatRemoteDataSource {
       ChatRemoteDataSource._internal();
   factory ChatRemoteDataSource() => _instance;
   ChatRemoteDataSource._internal();
+
   io.Socket? _socket;
 
   final StreamController<GetLastMessageModel> _messageController =
       StreamController<GetLastMessageModel>.broadcast();
-
+  final StreamController<List<GetSeemMessageModel>> _messageSeemController =
+      StreamController<List<GetSeemMessageModel>>.broadcast();
   final StreamController<MessageChangeControllerModel>
       _messageChangeController =
       StreamController<MessageChangeControllerModel>.broadcast();
 
+  Stream<List<GetSeemMessageModel>> get messageSeenStream =>
+      _messageSeemController.stream;
   Stream<GetLastMessageModel> get messageStream => _messageController.stream;
   Stream<MessageChangeControllerModel> get messageChangeStream =>
       _messageChangeController.stream;
@@ -44,6 +49,7 @@ class ChatRemoteDataSource {
           message: 'no data', status: 400, data: null);
   String _deleteChatMessageId = '';
   String _message = '';
+  final List<GetSeemMessageModel> _isSeenLocal = [];
 
   Future<bool> connect() async {
     if (_socket != null && _socket!.connected) {
@@ -79,6 +85,48 @@ class ChatRemoteDataSource {
     }
   }
 
+  Future<void> messageSeen(String chatMessageId, String chatId) async {
+    if (_socket == null || !_socket!.connected) {
+      await connect();
+    }
+    log('message seen: $chatMessageId');
+    log('chatId: $chatId');
+
+    _socket?.emit('message_seen', {
+      'chat_message_id': chatMessageId,
+      'chat_id': chatId,
+    });
+    log('message seen request sent');
+
+    _socket?.off('messages_seemed_result');
+    _socket?.on('messages_seemed_result', (data) {
+      log('message seen result: $data');
+      if (data != null && data is Map<String, dynamic>) {
+        try {
+          final responseModel = BaseResponseModel.fromJson(
+            data,
+            (json) => GetSeemMessageModel.fromJson(json),
+          );
+          if (responseModel.status == 200 && responseModel.data != null) {
+            // Add new seen messages without clearing the list
+            for (var message in responseModel.data!) {
+              if (!_isSeenLocal
+                  .any((m) => m.chatMessageId == message.chatMessageId)) {
+                _isSeenLocal.add(message);
+              }
+            }
+
+            // Emit updated seen messages
+            _messageSeemController.add(_isSeenLocal);
+            log('Updated seen messages: ${_isSeenLocal.length}');
+          }
+        } catch (err) {
+          log('❌ JSON dönüşüm hatası message seen: $err');
+        }
+      }
+    });
+  }
+
   Future<BaseResponseModel<GetLastMessageModel>> getAllMessage(
       String chatId) async {
     if (_socket == null || !_socket!.connected) {
@@ -106,7 +154,16 @@ class ChatRemoteDataSource {
           final messages = responseModel.data;
 
           if (!completer.isCompleted) {
+            // Store current seen messages
+            final currentSeenMessages =
+                List<GetSeemMessageModel>.from(_isSeenLocal);
+
             localAllMessage = responseModel;
+
+            // Restore seen messages
+            _isSeenLocal.clear();
+            _isSeenLocal.addAll(currentSeenMessages);
+
             completer.complete(responseModel);
             log('localAllMessage: ${localAllMessage.data}');
             return;
@@ -221,7 +278,6 @@ class ChatRemoteDataSource {
         _deleteChatMessageId = chatMessageId!;
         log('localAllMessage: ${localAllMessage.data!.length}');
         _getChatMessages();
-
         break;
       default:
         log('unknown message type');
@@ -283,6 +339,7 @@ class ChatRemoteDataSource {
     if (_socket == null || !_socket!.connected) {
       await connect();
     }
+    _isSeenLocal.clear();
     Completer<BaseResponseModel<GetChatModel>> completer = Completer();
     _socket?.emit('get_chats', {});
     _socket?.on('get_chats_result', (data) {

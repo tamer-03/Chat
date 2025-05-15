@@ -2,6 +2,7 @@ import 'package:chat_android/core/base_response.dart';
 import 'package:chat_android/features/chat/data/datasource/chat_remote_data_source.dart';
 import 'package:chat_android/features/chat/domain/entities/get_chat_entity.dart';
 import 'package:chat_android/features/chat/domain/entities/get_last_message_entity.dart';
+import 'package:chat_android/features/chat/domain/entities/get_seem_message_entity.dart';
 import 'package:chat_android/features/chat/domain/repository/chat_repository.dart';
 import 'dart:developer';
 
@@ -56,5 +57,10 @@ class ChatRepositoryImp implements ChatRepository {
         message: response.message,
         status: response.status,
         data: response.data);
+  }
+
+  @override
+  Future<void> messageSeen(String chatMessageId, String chatId) async {
+    await chatRemoteDataSource.messageSeen(chatMessageId, chatId);
   }
 }

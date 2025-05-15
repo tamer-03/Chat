@@ -1,5 +1,6 @@
 import 'package:chat_android/features/chat/domain/entities/get_chat_entity.dart';
 import 'package:chat_android/features/chat/domain/entities/get_last_message_entity.dart';
+import 'package:chat_android/features/chat/domain/entities/get_seem_message_entity.dart';
 import 'package:equatable/equatable.dart';
 
 abstract class ChatState extends Equatable {
@@ -19,13 +20,22 @@ class GetChatsSuccess extends ChatState {
 
 class GetAllMessageSucces extends ChatState {
   final List<GetLastMessageEntity> messageEntity;
+  final List<String> isSeenMessage;
+  GetAllMessageSucces(this.messageEntity, this.isSeenMessage);
+}
 
-  GetAllMessageSucces(this.messageEntity);
+class MessageSeenSuccess extends ChatState {
+  final List<String> isSeenMessage;
+  final List<GetLastMessageEntity> messageEntity;
+  MessageSeenSuccess(
+      {required this.isSeenMessage, required this.messageEntity});
 }
 
 class GetLastMessageSucces extends ChatState with EquatableMixin {
   final List<GetLastMessageEntity> messageEntity;
-  GetLastMessageSucces({required this.messageEntity});
+  final List<String> isSeenMessage;
+  GetLastMessageSucces(
+      {required this.messageEntity, required this.isSeenMessage});
 
   @override
   List<Object?> get props => [messageEntity];

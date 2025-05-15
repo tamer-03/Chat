@@ -290,20 +290,19 @@ export const markMessageAsSeen = async (
 ): Promise<Error | null> => {
   const connection = await databasePool.getConnection()
   try{
-    const errorMessage = (chat_message_id ? "Chat message id null" : null) || (user ? "User null" : null) || (chat_id ? "Chat id null" : null)
+    console.log("markMessageAsSeen", chat_message_id, user, chat_id)
+    const errorMessage = (chat_message_id ? false : null) || (user ? false : null) || (chat_id ? false : null)
     if(errorMessage) {
       connection.release()
       return Error(errorMessage)
     }
 
     await connection.beginTransaction()
-
     await connection.execute(
       `INSERT IGNORE INTO chat_message_reads (chat_message_id, user_id, chat_id)
        VALUES (UUID_TO_BIN(?), ?, UUID_TO_BIN(?));`,
       [chat_message_id, user, chat_id]
     );
-
     await connection.commit()
     return null
   }catch(e){

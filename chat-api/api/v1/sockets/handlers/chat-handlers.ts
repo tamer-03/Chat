@@ -227,6 +227,7 @@ export const deleteChatMessageHandler = async (data: any, socket: Socket) => {
 
 export const messageSeemedHandler = async (data: any, socket: Socket) => {
   try {
+    console.log("messageSeemedHandler", data);
     const { chat_message_id, chat_id } = data;
     const { user_id } = socket.data.user;
     const io = getSocketInstanse();
@@ -234,14 +235,18 @@ export const messageSeemedHandler = async (data: any, socket: Socket) => {
     const lastMessage = await getChatMessages(user_id, chat_id, undefined, 1);
 
     if (lastMessage[lastMessage.length - 1].user_id == user_id) {
+      console.log("last message is from you", lastMessage);
+      
       return;
     }
     await markMessageAsSeen(chat_message_id, user_id, chat_id);
+    const value = await checkOneSeemedMessage(chat_id, chat_message_id);
+    console.log("value", value);
 
     io.to(chat_id).emit("messages_seemed_result", {
       message: errorCodes.SUCCESS,
       status: 200,
-      value: await checkOneSeemedMessage(chat_id, chat_message_id),
+      value: value,
     } as ResponseModel);
   } catch (e) {
     if (e instanceof Error) {

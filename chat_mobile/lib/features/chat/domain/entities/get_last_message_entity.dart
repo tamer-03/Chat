@@ -8,6 +8,7 @@ class GetLastMessageEntity {
   String? message;
   final DateTime sendedAt;
   final String chatType;
+  bool? isSeemed = false;
 
   GetLastMessageEntity({
     required this.message,
@@ -19,5 +20,6 @@ class GetLastMessageEntity {
     required this.photo,
     required this.chatMessageId,
     required this.chatType,
+    this.isSeemed,
   });
 }

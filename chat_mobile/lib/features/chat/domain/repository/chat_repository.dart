@@ -1,6 +1,7 @@
 import 'package:chat_android/core/base_response.dart';
 import 'package:chat_android/features/chat/domain/entities/get_chat_entity.dart';
 import 'package:chat_android/features/chat/domain/entities/get_last_message_entity.dart';
+import 'package:chat_android/features/chat/domain/entities/get_seem_message_entity.dart';
 
 abstract class ChatRepository {
   Future<BaseResponseModel> createChat(int userId);
@@ -9,4 +10,5 @@ abstract class ChatRepository {
   Future<void> getLastMessage(String? message, String chatId,
       String messageType, String? chatMessageId, String? chatType);
   Future<BaseResponseModel<GetLastMessageEntity>> getAllMessage(String chatId);
+  Future<void> messageSeen(String chatMessageId, String chatId);
 }

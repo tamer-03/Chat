@@ -2,6 +2,7 @@ import 'package:chat_android/core/constant/chat_types.dart';
 import 'package:chat_android/core/constant/message_types.dart';
 import 'package:chat_android/core/theme.dart';
 import 'package:chat_android/features/chat/domain/entities/get_last_message_entity.dart';
+import 'package:chat_android/features/chat/domain/entities/get_seem_message_entity.dart';
 import 'package:chat_android/features/chat/domain/entities/local_all_messages_entity.dart';
 import 'package:chat_android/features/chat/presentation/blocs/chat_bloc.dart';
 import 'package:chat_android/features/chat/presentation/blocs/chat_event.dart';
@@ -30,6 +31,7 @@ class _ChatPageState extends State<ChatPage> {
   FocusNode _focusNode = FocusNode();
   bool _isEditing = false;
   String _editingMessageId = '';
+  bool _hasSeemMessageCalled = false;
 
   @override
   void initState() {
@@ -89,6 +91,7 @@ class _ChatPageState extends State<ChatPage> {
     _storage.delete(key: 'chat_type');
     localAllMessages.clear();
     _focusNode.dispose();
+
     super.dispose();
   }
 
@@ -101,11 +104,11 @@ class _ChatPageState extends State<ChatPage> {
     BlocProvider.of<ChatBloc>(context).add(GetChatsEvent());
   }
 
-  // void createChat(int userId) {
-  //   BlocProvider.of<ChatBloc>(context).add(ChatCreateEvent(userId));
-  //   log('userId: $userId');
-  //   log('creating chat');
-  // }
+  void seemMessage(String chatId, String chatMessageId) {
+    log('seemMessage called');
+    BlocProvider.of<ChatBloc>(context)
+        .add(MessageSeenEvent(chatId: chatId, chatMessageId: chatMessageId));
+  }
 
   void sendMessageAndGetLastMessage(String message, String chatId,
       String messageType, String chatMessageId, String chatType) {
@@ -142,15 +145,37 @@ class _ChatPageState extends State<ChatPage> {
           } else if (state is ChatFailure) {
             return Center(child: Text(state.errorMessage));
           } else if (state is GetLastMessageSucces) {
+            log('state uzungluğu: ${state.messageEntity.length}');
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              seemMessage(state.messageEntity.last.chatId,
+                  state.messageEntity.last.chatMessageId);
+            });
             return Column(children: [
               Expanded(
-                child: _buildListMessages(state.messageEntity),
+                child: _buildListMessages(
+                    state.messageEntity, state.isSeenMessage),
               ),
               _buildMessageInput()
             ]);
           } else if (state is GetAllMessageSucces) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              log('builder tamamlandı ve seemMessage çağrıldı');
+              seemMessage(state.messageEntity.last.chatId,
+                  state.messageEntity.last.chatMessageId);
+            });
             return Column(children: [
-              Expanded(child: _buildListMessages(state.messageEntity)),
+              Expanded(
+                child: _buildListMessages(
+                    state.messageEntity, state.isSeenMessage),
+              ),
+              _buildMessageInput()
+            ]);
+          } else if (state is MessageSeenSuccess) {
+            return Column(children: [
+              Expanded(
+                child: _buildListMessages(
+                    state.messageEntity, state.isSeenMessage),
+              ),
               _buildMessageInput()
             ]);
           }
@@ -171,13 +196,6 @@ class _ChatPageState extends State<ChatPage> {
             });
             //getAllMessage(_chatId);
           } else if (state is GetAllMessageSucces) {
-            log(' getAllMessageSucces UI ');
-            setState(() {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                _scrollController
-                    .jumpTo(_scrollController.position.maxScrollExtent);
-              });
-            });
           } else if (state is MessageDeleteSuccess) {
             log('message delete success');
             setState(() {
@@ -188,11 +206,15 @@ class _ChatPageState extends State<ChatPage> {
               _scrollController
                   .jumpTo(_scrollController.position.maxScrollExtent);
             });
+          } else if (state is MessageSeenSuccess) {
+            // localSeemedMessages
+            //     .addAll(state.isSeenMessage.map((e) => e.chatMessageId));
           }
         }));
   }
 
-  Widget _buildListMessages(List<GetLastMessageEntity> messages) {
+  Widget _buildListMessages(
+      List<GetLastMessageEntity> messages, List<String>? seenMessages) {
     if (messages.isEmpty) {
       return Center(
         child: Text(
@@ -206,6 +228,7 @@ class _ChatPageState extends State<ChatPage> {
         itemCount: messages.length,
         itemBuilder: (context, index) {
           final message = messages[index];
+
           if (message.userId == _toUserId) {
             return _buildReceivedMessage(
               context,
@@ -219,6 +242,7 @@ class _ChatPageState extends State<ChatPage> {
               message.sendedAt,
               message.chatId,
               message.chatMessageId,
+              seenMessages,
             );
           }
         },
@@ -295,9 +319,17 @@ class _ChatPageState extends State<ChatPage> {
     );
   }
 
-  Widget _buildSentMessage(BuildContext context, String? message, DateTime date,
-      String chatId, String chatMessageId) {
+  Widget _buildSentMessage(
+    BuildContext context,
+    String? message,
+    DateTime date,
+    String chatId,
+    String chatMessageId,
+    List<String>? localSeemedMessages,
+  ) {
     if (message != null) {
+      final bool isSeen = localSeemedMessages?.contains(chatMessageId) ?? false;
+
       return Align(
         alignment: Alignment.centerRight,
         child: GestureDetector(
@@ -328,39 +360,52 @@ class _ChatPageState extends State<ChatPage> {
                     _editingMessageId = chatMessageId;
                   });
                   log('edit message');
-                  //var editMessage = _messageController.text;
                   _focusNode.requestFocus();
-                  // sendMessageAndGetLastMessage(
-                  //     editMessage, chatId, '', chatMessageId, '');
-                  //editing message
                 }
               },
             );
           },
-          child: Container(
-            constraints: BoxConstraints(
-              maxWidth: MediaQuery.of(context).size.width * 0.7,
-            ),
-            margin: EdgeInsets.only(right: 16, top: 4, bottom: 4, left: 60),
-            padding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: DefaultColors.senderMessage,
-              borderRadius: BorderRadius.only(
-                topRight: Radius.circular(2),
-                bottomLeft: Radius.circular(18),
-                topLeft: Radius.circular(18),
-                bottomRight: Radius.circular(18),
+          child: Stack(
+            children: [
+              Container(
+                constraints: BoxConstraints(
+                  maxWidth: MediaQuery.of(context).size.width * 0.7,
+                ),
+                margin: EdgeInsets.only(right: 16, top: 4, bottom: 4, left: 60),
+                padding:
+                    EdgeInsets.only(left: 14, right: 30, top: 10, bottom: 20),
+                decoration: BoxDecoration(
+                  color: DefaultColors.senderMessage,
+                  borderRadius: BorderRadius.only(
+                    topRight: Radius.circular(2),
+                    bottomLeft: Radius.circular(18),
+                    topLeft: Radius.circular(18),
+                    bottomRight: Radius.circular(18),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(message,
+                        style: Theme.of(context).textTheme.bodyMedium),
+                    SizedBox(height: 3),
+                    Row(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(_formatMessageTime(date),
+                              style: Theme.of(context).textTheme.bodySmall),
+                          SizedBox(
+                            width: 10,
+                          ),
+                          Icon(Icons.done_all,
+                              size: 15,
+                              color: isSeen ? Colors.blue : Colors.grey)
+                        ]),
+                  ],
+                ),
               ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(message, style: Theme.of(context).textTheme.bodyMedium),
-                SizedBox(height: 3),
-                Text(_formatMessageTime(date),
-                    style: Theme.of(context).textTheme.bodySmall),
-              ],
-            ),
+            ],
           ),
         ),
       );
@@ -381,24 +426,30 @@ class _ChatPageState extends State<ChatPage> {
           maxWidth: MediaQuery.of(context).size.width * 0.7,
         ),
         margin: EdgeInsets.only(left: 16, top: 4, bottom: 4, right: 60),
-        padding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: DefaultColors.senderMessage,
-          borderRadius: BorderRadius.only(
-            topLeft: Radius.circular(2),
-            bottomLeft: Radius.circular(18),
-            topRight: Radius.circular(18),
-            bottomRight: Radius.circular(18),
+        child: Container(
+          padding: EdgeInsets.only(
+              left: 14,
+              right: 30,
+              top: 10,
+              bottom: 20), // Sağda ikon için boşluk
+          decoration: BoxDecoration(
+            color: DefaultColors.senderMessage,
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(2),
+              bottomLeft: Radius.circular(18),
+              topRight: Radius.circular(18),
+              bottomRight: Radius.circular(18),
+            ),
           ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(message!, style: Theme.of(context).textTheme.bodyMedium),
-            SizedBox(height: 3),
-            Text(_formatMessageTime(date),
-                style: Theme.of(context).textTheme.bodySmall),
-          ],
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(message!, style: Theme.of(context).textTheme.bodyMedium),
+              SizedBox(height: 3),
+              Text(_formatMessageTime(date),
+                  style: Theme.of(context).textTheme.bodySmall),
+            ],
+          ),
         ),
       ),
     );

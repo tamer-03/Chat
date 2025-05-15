@@ -100,9 +100,8 @@ class _MessagePageState extends State<MessagePage> {
                       } else if (state is GetChatsSuccess) {
                         localChats = state.chats;
                         return _buildMessageTile(context, state.chats);
-                      } else {
-                        return Center(child: Text('Error'));
                       }
+                      return _buildMessageTile(context, localChats);
                     },
                   )))
         ],
